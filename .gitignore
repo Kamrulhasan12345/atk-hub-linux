@@ -1,0 +1,5 @@
+*.exe
+__pycache__/
+node_modules/
+# ATK HUB's own resources/ (proprietary, ~160MB): copy from the Windows install
+linux/app/resources/
