@@ -1,0 +1,2 @@
+# ATK / VXE mice and dongles: let the logged-in user talk to the vendor HID interface
+KERNEL=="hidraw*", ATTRS{idVendor}=="373b", TAG+="uaccess"

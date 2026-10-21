@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATK HUB Linux</title>
+<style>
+:root { --bg:#f6f6f4; --card:#fff; --fg:#1b1b1b; --mute:#6b6b6b; --line:#e2e2de; --acc:#2f6fed; --bad:#c62828; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141414; --card:#1e1e1e; --fg:#ececec; --mute:#9a9a9a; --line:#2e2e2e; --acc:#6d9bff; --bad:#ff6b6b; } }
+* { box-sizing:border-box }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
+main { max-width:860px; margin:0 auto; padding:20px 16px 60px; }
+header { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+h1 { font-size:20px; margin:0; } h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); margin:0 0 10px; }
+.sub { color:var(--mute); }
+section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+.row label { min-width:130px; color:var(--mute); }
+input, select, button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:5px 8px; }
+input[type=number] { width:90px; } input[type=color] { padding:0; width:34px; height:30px; }
+button { cursor:pointer; } button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+.stage { display:grid; grid-template-columns:28px 1fr 34px auto; gap:8px; align-items:center; margin:4px 0; }
+.stage.on b { color:var(--acc); }
+#msg { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; opacity:0; transition:opacity .2s; max-width:90vw; }
+#msg.show { opacity:1 } #msg.err { background:var(--bad); color:#fff }
+.grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1 id="model">ATK HUB</h1><span class="sub" id="meta">connecting…</span><button onclick="load()">Refresh</button></header>
+
+  <section><h2>DPI</h2><div id="stages"></div></section>
+
+  <section><h2>Performance</h2><div class="grid2">
+    <div class="row"><label>Polling rate</label><select id="rate" onchange="send({op:'rate',value:this.value})">
+      <option>125</option><option>250</option><option>500</option><option>1000</option><option>2000</option><option>4000</option><option>8000</option></select></div>
+    <div class="row"><label>Sensor mode</label><select id="sensor_mode" onchange="send({op:'sensor_mode',value:this.value})">
+      <option value="base">Base</option><option value="athletics">Athletics</option><option value="athletics-max">Athletics Max</option></select></div>
+    <div class="row"><label>Lift-off distance</label><select id="lod" onchange="send({op:'lod',value:this.value})">
+      <option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></div>
+    <div class="row"><label>Debounce (ms)</label><input type="number" id="debounce" min="0" max="30" onchange="send({op:'debounce',value:this.value})"></div>
+    <div class="row"><label>Sensor sleep</label><input type="number" id="sleep" min="0" onchange="send({op:'sleep',value:this.value})"></div>
+    <div class="row"><label>Profile</label><select id="profile" onchange="send({op:'profile',value:this.value})">
+      <option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option></select></div>
+    <div class="row"><label>Motion sync</label><input type="checkbox" id="motion_sync" onchange="send({op:'motion_sync',value:+this.checked})"></div>
+    <div class="row"><label>Angle snapping</label><input type="checkbox" id="angle_snap" onchange="send({op:'angle_snap',value:+this.checked})"></div>
+    <div class="row"><label>Ripple control</label><input type="checkbox" id="ripple" onchange="send({op:'ripple',value:+this.checked})"></div>
+  </div></section>
+
+  <section><h2>Buttons</h2><div id="buttons"></div>
+    <p class="sub">Actions: left, right, middle, back, forward, dpi-cycle, dpi+, dpi-, scroll-up, scroll-down, profile-loop, disable, key:ctrl+c, media:vol+, fire:3:50</p></section>
+
+  <section><h2>Lighting</h2><div class="row">
+    <select id="lmode"><option>off</option><option>breathing</option><option>steady</option></select>
+    <select id="lbright"><option>low</option><option>medium</option><option selected>high</option></select>
+    <select id="lspeed"><option>slow</option><option selected>medium</option><option>fast</option></select>
+    <button onclick="send({op:'light',mode:lmode.value,brightness:lbright.value,speed:lspeed.value})">Apply</button></div></section>
+
+  <section><h2>Dongle</h2><button onclick="send({op:'pair'})">Start pairing</button></section>
+</main>
+<div id="msg"></div>
+<script>
+let info = null;
+const $ = id => document.getElementById(id);
+function toast(t, err) { const m = $('msg'); m.textContent = t; m.className = 'show' + (err ? ' err' : ''); clearTimeout(m._t); m._t = setTimeout(() => m.className = '', 2500); }
+async function send(body) {
+  const r = await (await fetch('/api/set', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})).json();
+  r.ok ? toast('Saved') : toast(r.error, true);
+  return r.ok;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function load() {
+  const r = await (await fetch('/api/info')).json();
+  if (!r.ok) { $('meta').textContent = r.error; return; }
+  info = r.data;
+  $('model').textContent = info.model;
+  $('meta').textContent = `${info.sensor} · fw ${info.firmware} · dongle ${info.dongle_firmware ?? '-'} · battery ${info.battery}%${info.charging ? ' ⚡' : ''}`;
+  for (const k of ['rate','sensor_mode','lod','debounce','sleep','profile']) $(k).value = k === 'rate' ? info.polling_rate : info[k];
+  for (const k of ['motion_sync','angle_snap','ripple']) $(k).checked = !!info[k];
+  $('lmode').value = info.light.mode;
+  const [lo, hi, step] = info.dpi_range;
+  $('stages').innerHTML = info.dpi.map((s, i) => !s.x ? '' : `
+    <div class="stage ${i === info.dpi_stage ? 'on' : ''}"><b>${i + 1}</b>
+      <input type="range" min="${lo}" max="${hi}" step="${step}" value="${s.x}" id="d${i}" oninput="v${i}.value=this.value">
+      <input type="color" value="${s.color}" id="c${i}">
+      <span><input type="number" min="${lo}" max="${hi}" step="${step}" value="${s.x}" id="v${i}" oninput="d${i}.value=this.value">
+      <button onclick="setDpi(${i},false)">Set</button> <button class="primary" onclick="setDpi(${i},true)">Use</button></span></div>`).join('');
+  $('buttons').innerHTML = Object.entries(info.buttons).map(([b, a]) => `
+    <div class="row"><label>${b}</label><input value="${esc(a)}" id="b_${b}"><button onclick="send({op:'button',button:'${b}',action:$('b_${b}').value})">Set</button></div>`).join('');
+}
+async function setDpi(i, active) {
+  if (await send({op:'dpi', stage:i, x:$('v' + i).value, color:$('c' + i).value, active})) if (active) load();
+}
+load();
+</script>
+</body>
+</html>
